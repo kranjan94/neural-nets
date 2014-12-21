@@ -1,0 +1,27 @@
+% Sample network layout file. This topology has 3 input nodes, one hidden layer
+% with 4 nodes, one hidden layer with 2 nodes, and 2 output nodes.
+
+3 4 2 2
+
+% Input nodes are always connected to the harness and should never have
+% connections specified in .network files.
+
+% First hidden layer. The top node is connected to all inputs.
+1.1: 0.1 0.2 0.3
+% The second node is connected to the first and second inputs.
+1.2: 0.1 0.2
+% The third node is connected to the second and third inputs.
+1.3: 0.2 0.3
+% The fourth node is connected to the first and third inputs.
+1.4: 0.1 0.3
+
+% Second hidden layer. The top node is connected to the top two nodes from
+% the first hidden layer.
+2.1: 1.1 1.2
+% And the bottom node is connected to the bottom two nodes from the first
+% hidden layer.
+2.2: 1.3 1.4
+
+% Each output node is connected to each 2nd-layer hidden node.
+3.1: 2.1 2.2
+3.2: 2.1 2.2

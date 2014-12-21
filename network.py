@@ -10,36 +10,54 @@ class Network(object):
             inputActivationFunction=sigmoidActivation,
             hiddenActivationFunction=sigmoidActivation,
             outputActivationFunction=sigmoidActivation):
+        """Basic initializer. Initializes a network with a given number of input
+        nodes, hidden layers and hidden nodes, and output nodes. This method
+        initializes a fully connected network (i.e. every node is connected to
+        every node in the previous layer) by default. More complex topologies
+        can be built via .network files (see below)."""
         self.harness = NetworkHarness()
+        self.nodes = {}  # Maps node indices to Node objects
         self.bias = BiasNode() if bias else False  # Initialize bias node
         # Initialize input layer
         self.inputLayer = []
         for j in range(numInput):
-            node = InputNode(inputActivationFunction, self.harness)
+            index = '0.' + str(j + 1)
+            node = InputNode(inputActivationFunction, index, self.harness)
             self.harness.registerInputNode(node)
             self.inputLayer.append(node)
+            self.nodes[index] = node
         # Initialize hidden layers
         self.hiddenLayers = []
         for i in range(len(numsHidden)):
             layer = []
             prevLayer = self.inputLayer if i == 0 else self.hiddenLayers[i-1]
             for j in range(numsHidden[i]):
-                node = HiddenNode(hiddenActivationFunction, self.bias)
+                index = str(i + 1) + '.' + str(j + 1)
+                node = HiddenNode(hiddenActivationFunction, index, self.bias)
                 for parent in prevLayer:
                     node.registerParent(parent)
                 layer.append(node)
+                self.nodes[index] = node
             self.hiddenLayers.append(layer)
         # Initialize output layer
         self.outputLayer = []
         penultimateLayer = self.inputLayer
         if len(self.hiddenLayers) != 0:
             penultimateLayer = self.hiddenLayers[-1]
+        outputLayerNumber = len(self.hiddenLayers) + 1
         for j in range(numOutput):
-            node = OutputNode(outputActivationFunction, self.bias)
+            index = str(outputLayerNumber) + '.' + str(j + 1)
+            node = OutputNode(outputActivationFunction, index, self.bias)
             self.harness.registerOutputNode(node)
             for parent in penultimateLayer:
                 node.registerParent(parent)
             self.outputLayer.append(node)
+            self.nodes[index] = node
+
+    def __init__(self):
+        """Returns an empty network."""
+        self.harness, self.nodes, self.bias = None, None, None
+        self.inputLayer, self.hiddenLayers, self.outputLayer = [], [], []
 
     def __str__(self):
         out = "Network:\n\tInput layer:\t" + str(map(str, self.inputLayer))
@@ -48,6 +66,23 @@ class Network(object):
             out += "\n\tHidden layer " + str(i + 1) + ":\t" + layerString
         out += "\n\tOutput layer:\t" + str(map(str, self.outputLayer))
         return out
+
+    @staticmethod
+    def fromFile(networkLayoutFilename, bias=False,
+        inputActivationFunction=sigmoidActivation,
+        hiddenActivationFunction=sigmoidActivation,
+        outputActivationFunction=sigmoidActivation):
+        """Initializes a network from a .network file. See networkFileReader.py
+        for instructions on creating these files."""
+        from networkFileReader import NetworkFileReader
+        layers, nodes, harness = NetworkFileReader.read(networkLayoutFilename,
+            inputActivationFunction, hiddenActivationFunction,
+            outputActivationFunction, bias)
+        network = Network()
+        network.harness, network.nodes, network.bias = harness, nodes, bias
+        network.inputLayer, network.outputLayer = layers[0], layers[-1]
+        network.hiddenLayers = [] if len(layers) < 3 else layers[1:-1]
+        return network
 
     def getWeights(self, layer, nodeNumber):
         layers = [self.inputLayer] + self.hiddenLayers + [self.outputLayer]
@@ -61,6 +96,7 @@ class Network(object):
         """Run data through the network."""
         return self.harness.run(data)
 
+
 class Perceptron(Network):
     """Perceptron implementation as a special case of the Network class with no
     hidden layers and one output node. Uses a zero-one activation function and
@@ -71,6 +107,7 @@ class Perceptron(Network):
         Network.__init__(self, numInputs, [], 1, bias,
         inputActivationFunction=identityActivation,
         outputActivationFunction=outputActivationFunction)
+
 
 class NetworkHarness(object):
     """A NetworkHarness provides the framework for a neural network. It feeds
@@ -106,17 +143,22 @@ class NetworkHarness(object):
         self.inputs = data
         return [node.process() for node in self.outputs]
 
+
 class Node(object):
     """Represents a single node in the network."""
-    def __init__(self, activationFunc, bias=False):
+    def __init__(self, activationFunc, index ,bias=False):
         self.activationFunc = activationFunc
+        self.index = index  # A node's index is its unique identifier
         # If bias is False, ignore it; else, incorporate the bias node
         self.bias = bias
-        self.weights = [1.0] if bias else []
+        self.weights = [0.0] if bias else []
         self.inputs = [bias] if bias else []
 
     def __str__(self):
-        return str(self.__class__.__name__) + ": " + str(self.process())
+        """The str() method for a Node prints its type, its index, and its
+        current output value."""
+        typeName = str(self.__class__.__name__)
+        return typeName + " " + self.index + ": " + str(self.process())
 
     def registerParent(self, node):
         """Registers an input node and initializes its weight to 0."""
@@ -128,12 +170,11 @@ class Node(object):
         using the activation function. Implemented by each Node subclass."""
         pass
 
-
 class InputNode(Node):
     """An input node. Only source of input is one input from the network
     harness."""
-    def __init__(self, activationFunc, harness):
-        Node.__init__(self, activationFunc, False)
+    def __init__(self, activationFunc, index, harness):
+        Node.__init__(self, activationFunc, index, False)
         self.harness = harness
 
     def process(self):
@@ -166,6 +207,7 @@ class OutputNode(Node):
             rawInput = node.process()
             weightedInput += rawInput * weight
         return self.activationFunc(weightedInput)
+
 
 class BiasNode(Node):
     """Node that always returns a fixed value from its process() method. Only
