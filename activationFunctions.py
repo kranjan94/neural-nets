@@ -28,7 +28,7 @@ def arctanDerivative(arg):
 # This dictionary can be used to get the derivative for an activation function
 # e.g. derivative = activationFunctions.DERIVATIVES[node.activationFunc]
 DERIVATIVES = {
-    zeroOneActivation: None,  # Nondifferentiable
+    zeroOneActivation: None,  # Non-differentiable
     identityActivation: identityDerivative,
     sigmoidActivation: sigmoidDerivative,
     arctanActivation: arctanDerivative

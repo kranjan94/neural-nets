@@ -1,12 +1,13 @@
 from activationFunctions import identityActivation, zeroOneActivation, \
     sigmoidActivation, arctanActivation
-from networkExceptions import InvalidInputNodeException, BadInputException
+from networkExceptions import InvalidInputNodeException, BadInputException, \
+    NetworkFileException
 
 class Network(object):
     """Main class for a network. Keeps track of each layer of the network as
     well as its harness. Uses a sigmoid activation function by default,
     though others can be used (see activationFunctions.py)."""
-    def __init__(self, numInput, numsHidden, numOutput, bias=False,
+    def __init__(self, numInput=0, numsHidden=[], numOutput=0, bias=False,
             inputActivationFunction=sigmoidActivation,
             hiddenActivationFunction=sigmoidActivation,
             outputActivationFunction=sigmoidActivation):
@@ -54,12 +55,8 @@ class Network(object):
             self.outputLayer.append(node)
             self.nodes[index] = node
 
-    def __init__(self):
-        """Returns an empty network."""
-        self.harness, self.nodes, self.bias = None, None, None
-        self.inputLayer, self.hiddenLayers, self.outputLayer = [], [], []
-
     def __str__(self):
+        """Prints each layer of the network, from input to output."""
         out = "Network:\n\tInput layer:\t" + str(map(str, self.inputLayer))
         for i, layer in enumerate(self.hiddenLayers):
             layerString = str(map(str, layer))
@@ -68,29 +65,37 @@ class Network(object):
         return out
 
     @staticmethod
-    def fromFile(networkLayoutFilename, bias=False,
+    def fromFile(filename, bias=False,
         inputActivationFunction=sigmoidActivation,
         hiddenActivationFunction=sigmoidActivation,
         outputActivationFunction=sigmoidActivation):
         """Initializes a network from a .network file. See networkFileReader.py
         for instructions on creating these files."""
         from networkFileReader import NetworkFileReader
-        layers, nodes, harness = NetworkFileReader.read(networkLayoutFilename,
+        layers, nodes, harness = NetworkFileReader.read(filename,
             inputActivationFunction, hiddenActivationFunction,
             outputActivationFunction, bias)
         network = Network()
         network.harness, network.nodes, network.bias = harness, nodes, bias
         network.inputLayer, network.outputLayer = layers[0], layers[-1]
         network.hiddenLayers = [] if len(layers) < 3 else layers[1:-1]
+        try:
+            network.run([0.0] * len(network.inputLayer))
+        except RuntimeError:
+            raise NetworkFileException("Loop detected in " + filename + ".")
         return network
 
-    def getWeights(self, layer, nodeNumber):
-        layers = [self.inputLayer] + self.hiddenLayers + [self.outputLayer]
-        return layers[layer][nodeNumber].weights
+    def getWeights(self, node):
+        """Returns the weights of a node, ordered by the order in which its
+        inputs were registered."""
+        return [node.weights[i] for i in node.inputs]
 
-    def setWeights(self, layer, nodeNumber, newWeights):
-        layers = [self.inputLayer] + self.hiddenLayers + [self.outputLayer]
-        layers[layer][nodeNumber].weights = newWeights
+    def setWeights(self, node, newWeights):
+        """Sets the weights of a node according to newWeights. newWeights should
+        have the weights ordered as in getWeights (e.g. if this node is node j
+        and the input list is [i1, i2, i3], then the newWeights vector should be
+        [w1j, w2j, w3j])."""
+        node.weights = {n:weight for n, weight in zip(node.inputs, newWeights)}
 
     def run(self, data):
         """Run data through the network."""
@@ -151,8 +156,9 @@ class Node(object):
         self.index = index  # A node's index is its unique identifier
         # If bias is False, ignore it; else, incorporate the bias node
         self.bias = bias
-        self.weights = [0.0] if bias else []
+        self.weights = {bias: 0.0} if bias else {}
         self.inputs = [bias] if bias else []
+        self.children = set()
 
     def __str__(self):
         """The str() method for a Node prints its type, its index, and its
@@ -161,9 +167,23 @@ class Node(object):
         return typeName + " " + self.index + ": " + str(self.process())
 
     def registerParent(self, node):
-        """Registers an input node and initializes its weight to 0."""
-        self.weights.append(0.0)
+        """Registers an input node and initializes its weight to 0. Also
+        registers self as a child of the node."""
         self.inputs.append(node)
+        self.weights[node] = 0.0
+        node.registerChild(self)
+
+    def registerChild(self, node):
+        """Registers a node as a child of this node."""
+        self.children.add(node)
+
+    def getWeightedInputSum(self):
+        """Returns the weighted sum of the inputs to this node."""
+        weightedInput = 0.0
+        for node in self.inputs:
+            rawInput = node.process()
+            weightedInput += rawInput * self.weights[node]
+        return weightedInput
 
     def process(self):
         """Grabs inputs to this node, computes net input, and returns output
@@ -189,11 +209,7 @@ class HiddenNode(Node):
     def process(self):
         """Computes weighted sum of input nodes and returns the value after
         passing through the activation function."""
-        weightedInput = 0.0
-        for node, weight in zip(self.inputs, self.weights):
-            rawInput = node.process()
-            weightedInput += rawInput * weight
-        return self.activationFunc(weightedInput)
+        return self.activationFunc(self.getWeightedInputSum())
 
 
 class OutputNode(Node):
@@ -202,11 +218,7 @@ class OutputNode(Node):
     def process(self):
         """Computes weighted sum of input nodes and returns the value after
         passing through the activation function."""
-        weightedInput = 0.0
-        for node, weight in zip(self.inputs, self.weights):
-            rawInput = node.process()
-            weightedInput += rawInput * weight
-        return self.activationFunc(weightedInput)
+        return self.activationFunc(self.getWeightedInputSum())
 
 
 class BiasNode(Node):
