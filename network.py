@@ -64,6 +64,19 @@ class Network(object):
         out += "\n\tOutput layer:\t" + str(map(str, self.outputLayer))
         return out
 
+    def nodeDetails(self):
+        """Prints the weight vector for every node in the network."""
+        print("Input layer:")
+        for node in self.inputLayer:
+            print("\t" + str(node) + ": (connected to input harness)")
+        for num, layer in enumerate(self.hiddenLayers):
+            print("Hidden layer " + str(num + 1) + ":")
+            for node in layer:
+                print("\t" + str(node) + ": " + str(node.weightVectorString()))
+        print("Output layer:")
+        for node in self.outputLayer:
+            print("\t" + str(node) + ": " + str(node.weightVectorString()))
+
     @staticmethod
     def fromFile(filename, bias=False,
         inputActivationFunction=sigmoidActivation,
@@ -185,6 +198,13 @@ class Node(object):
             weightedInput += rawInput * self.weights[node]
         return weightedInput
 
+    def weightVectorString(self):
+        """Returns a simplified string version of the weight vector."""
+        vector = [node.index + ": " + str(self.weights[node]) \
+            for node in self.weights]
+        vector.sort()
+        return "(" + ", ".join(vector) + ")"
+
     def process(self):
         """Grabs inputs to this node, computes net input, and returns output
         using the activation function. Implemented by each Node subclass."""
@@ -226,6 +246,7 @@ class BiasNode(Node):
     one instance should exist per Network."""
     def __init__(self, value=1.0):
         self.value = value
+        self.index = "bias"
 
     def process(self):
         return self.value

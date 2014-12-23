@@ -38,6 +38,11 @@ def train(network, sourceFile, learningRateFunction, summary=True):
     else:
         trainNetwork(network, dataSource, learningRateFunction, summary)
 
+def validate(network, sourceFile, summary=True):
+    """Main function for validating networks."""
+    dataSource = open(sourceFile)
+    validateNetwork(network, dataSource, summary)
+
 def trainPerceptron(perceptron, dataSource, learningRateFunction, summary=True):
     """Trains a perceptron according to the data points in a data source.
     Each line should contain n whitespace-delimited inputs (where n is the
@@ -61,7 +66,7 @@ def trainPerceptron(perceptron, dataSource, learningRateFunction, summary=True):
         delta = learningRate * (label - prediction)
         if len(inputs) == len(weights) - 1:
             inputs = [1.0] + inputs  # Adjust for bias node
-        newWeights = {w + delta * i for w, i in zip(weights, inputs)}
+        newWeights = [w + delta * i for w, i in zip(weights, inputs)]
         if delta != 0:
             numUpdates += 1
         perceptron.setWeights(perceptron.outputLayer[0], newWeights)
@@ -158,6 +163,7 @@ def validateNetwork(net, dataSource, summary=True):
         0.4 -1.2 5.2 red
     denotes a data point with features (0.4, -1.2, 5.2) in class "red". If
     summary is set to False, the session will not be summarized."""
+    # TODO: Adapt for general networks.
     lines = dataSource.readlines()
     total = len(lines)
     correct = 0.0
