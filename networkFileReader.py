@@ -18,6 +18,11 @@ class NetworkFileReader(object):
             x2 is the one-indexed depth in the layer of X, so the topmost node
             has x2 = 1. For example, the 3rd node from the top in the second
             hidden layer would have index '2.3'.
+        -   You can also have a line starting with 'LABELS: '. The rest of this
+            line should consist of space-delimited labels (each with no spaces)
+            which will be used as labels for the output nodes. There must be
+            exactly as many labels as output nodes. If this line is not present,
+            the nodes will be labeled by their numbers.
     Lines starting with '%' are treated as comments and will be ignored. Blank
     lines will also be ignored. See examples/exampleLayout.network for an
     example of a .network file.
@@ -43,6 +48,7 @@ class NetworkFileReader(object):
         bias = BiasNode() if bias else False
         # First, initialize layers with no connections
         layers = []
+        labels = list(map(str, range(layerSizes[-1])))
         for i, size in enumerate(layerSizes):
             layer = []
             for j in range(size):
@@ -59,10 +65,18 @@ class NetworkFileReader(object):
                 layer.append(node)
                 nodes[index] = node
             layers.append(layer)
-        # Second, use the input file to make connections.
+        # Second, use the input file to make connections and read labels.
         try:
             for line in lines[1:]:
                 line = line[:-1] if line[-1] == '\n' else line
+                if len(line) > 8 and line[:8] == 'LABELS: ':
+                    customLabels = line[8:].split()
+                    if len(customLabels) != len(labels):
+                        raise NetworkFileException("Incorrect number of labels"
+                            + "specified: received " + len(customLabels) + ", "
+                            + "expected " + len(labels) + ".")
+                    labels = customLabels
+                    continue
                 nodeIndex, inputIndices = line.split(': ')
                 if nodeIndex not in nodes:
                     raise NetworkFileException("Node " + nodeIndex + " not "
@@ -76,4 +90,4 @@ class NetworkFileReader(object):
                     targetNode.registerParent(parent)
         except Exception as e:
             raise NetworkFileException("Error reading layout file: " + str(e))
-        return (layers, nodes, harness)
+        return (layers, nodes, harness, labels)

@@ -25,3 +25,7 @@
 % Each output node is connected to each 2nd-layer hidden node.
 3.1: 2.1 2.2
 3.2: 2.1 2.2
+
+% We can also (optionally) specify labels. There must be exactly as many
+% labels as output nodes; here, we need 2.
+LABELS: red blue

@@ -2,12 +2,15 @@ from activationFunctions import identityActivation, zeroOneActivation, \
     sigmoidActivation, arctanActivation
 from networkExceptions import InvalidInputNodeException, BadInputException, \
     NetworkFileException
+from math import exp
+from random import random
 
 class Network(object):
     """Main class for a network. Keeps track of each layer of the network as
     well as its harness. Uses a sigmoid activation function by default,
     though others can be used (see activationFunctions.py)."""
     def __init__(self, numInput=0, numsHidden=[], numOutput=0, bias=False,
+            validLabels=None,
             inputActivationFunction=sigmoidActivation,
             hiddenActivationFunction=sigmoidActivation,
             outputActivationFunction=sigmoidActivation):
@@ -19,6 +22,9 @@ class Network(object):
         self.harness = NetworkHarness()
         self.nodes = {}  # Maps node indices to Node objects
         self.bias = BiasNode() if bias else False  # Initialize bias node
+        self.validLabels = validLabels
+        if validLabels == None:
+            self.validLabels = [str(i) for i in range(numOutput)]
         # Initialize input layer
         self.inputLayer = []
         for j in range(numInput):
@@ -85,13 +91,14 @@ class Network(object):
         """Initializes a network from a .network file. See networkFileReader.py
         for instructions on creating these files."""
         from networkFileReader import NetworkFileReader
-        layers, nodes, harness = NetworkFileReader.read(filename,
+        layers, nodes, harness, labels = NetworkFileReader.read(filename,
             inputActivationFunction, hiddenActivationFunction,
             outputActivationFunction, bias)
         network = Network()
         network.harness, network.nodes, network.bias = harness, nodes, bias
         network.inputLayer, network.outputLayer = layers[0], layers[-1]
         network.hiddenLayers = [] if len(layers) < 3 else layers[1:-1]
+        network.validLabels = labels
         try:
             network.run([0.0] * len(network.inputLayer))
         except RuntimeError:
@@ -111,8 +118,14 @@ class Network(object):
         node.weights = {n:weight for n, weight in zip(node.inputs, newWeights)}
 
     def run(self, data):
-        """Run data through the network."""
-        return self.harness.run(data)
+        """Run data through the network and returns the label with the highest
+        softmax score."""
+        scores = self.harness.run(data)
+        exponentials = [exp(s) for s in scores]
+        total = sum(exponentials)
+        softmaxScores = [x/total for x in exponentials]
+        maxIndex = softmaxScores.index(max(softmaxScores))
+        return self.validLabels[maxIndex]
 
 
 class Perceptron(Network):
@@ -122,9 +135,13 @@ class Perceptron(Network):
     def __init__(self, numInputs, bias=True,
         inputActivationFunction=identityActivation,
         outputActivationFunction=zeroOneActivation):
-        Network.__init__(self, numInputs, [], 1, bias,
+        Network.__init__(self, numInputs, [], 1, bias, validLabels=['0','1'],
         inputActivationFunction=identityActivation,
         outputActivationFunction=outputActivationFunction)
+
+    def run(self, data):
+        """Overrides the general Network run() method to return 0 or 1."""
+        return str(self.harness.run(data)[0])
 
 
 class NetworkHarness(object):

@@ -26,6 +26,12 @@ def randomInverseTimeLearningRate(rate):
         return random() * float(rate)/t
     return function
 
+def exponentialLearningRate(base):
+    """At time t, returns the learning rate base^(t-1)."""
+    def function(t):
+        return base ** (t-1)
+    return function
+
 """ -- Training functions -- """
 
 ERROR_THRESHOLD = 0.05  # Threshold for detecting errors from networks
@@ -43,6 +49,20 @@ def validate(network, sourceFile, summary=True):
     dataSource = open(sourceFile)
     validateNetwork(network, dataSource, summary)
 
+def prepDataFile(rawDataFilename, labels):
+    outputDataFilename = rawDataFilename + '.data'
+    file = open(outputDataFilename, 'w')
+    for line in file.readlines():
+        line = line[:-1] if line[-1] == '\n' else line
+        data = line.split()
+        inputs = data[:-1]
+        label = data[-1]
+        outputVector = [1.0 if l == label else 0.0 for l in labels]
+        processedLine = inputs + outputVector
+        file.write('\t'.join(processedLine) + '\n')
+    file.close()
+    return outputDataFilename
+
 def trainPerceptron(perceptron, dataSource, learningRateFunction, summary=True):
     """Trains a perceptron according to the data points in a data source.
     Each line should contain n whitespace-delimited inputs (where n is the
@@ -59,11 +79,12 @@ def trainPerceptron(perceptron, dataSource, learningRateFunction, summary=True):
         t += 1
         learningRate = learningRateFunction(t)
         data = line.split()
-        label = int(data[-1])
+        label = data[-1]
         inputs = list(map(int, data[:-1]))
-        prediction = perceptron.run(inputs)[0]
+        prediction = perceptron.run(inputs)
         weights = perceptron.getWeights(perceptron.outputLayer[0])
-        delta = learningRate * (label - prediction)
+        error = int(label) - int(prediction)
+        delta = learningRate * error
         if len(inputs) == len(weights) - 1:
             inputs = [1.0] + inputs  # Adjust for bias node
         newWeights = [w + delta * i for w, i in zip(weights, inputs)]
@@ -83,9 +104,16 @@ def computeNodeErrors(net, inputs, actualOutputs):
     squared error of the network on the data point."""
     errors = {}
     squareError = 0.0
-    predictedOutputs = net.run(inputs)
+    label = net.run(inputs)
+    predictedOutputs = [1.0 if l == label else 0.0 for l in net.validLabels]
     for i, node in enumerate(net.outputLayer):
-        errors[node] = predictedOutputs[i] - actualOutputs[i]
+        activationDerivative = DERIVATIVES[node.activationFunc]
+        if activationDerivative is None:
+            raise TrainingError("Activation function of node "
+                + str(node) + " is non-differentiable.")
+        weightedInput = node.getWeightedInputSum()
+        nodeDerivative = activationDerivative(weightedInput)
+        errors[node] = nodeDerivative * (predictedOutputs[i] - actualOutputs[i])
         squareError += errors[node] ** 2
     reversedLayers = net.hiddenLayers[:]
     reversedLayers.reverse()
@@ -115,6 +143,7 @@ def computeNodeErrors(net, inputs, actualOutputs):
                 nodeDerivative = activationDerivative(weightedInput)
                 errors[node] = nodeDerivative * totalChildError
         toBeComputed = newToBeComputed
+    #print({str(n): errors[n] for n in errors})
     return (errors, squareError)
 
 def backpropagation(net, inputs, actualOutputs, learningRate):
@@ -139,18 +168,19 @@ def backpropagation(net, inputs, actualOutputs, learningRate):
 
 def trainNetwork(net, dataSource, learningRateFunction, summary=True):
     """Uses backpropagation to train a network on several training samples."""
-    numInputs = len(net.inputLayer)
     t = 0
     lines = dataSource.readlines()
     numUpdates = 0
+    labels = net.validLabels
     for line in lines:
         line = line[:-1] if line[-1] == '\n' else line
         t += 1
         learningRate = learningRateFunction(t)
-        data = list(map(int, line.split()))
-        inputs = data[:numInputs]
-        actualOutputs = data[numInputs:]
-        if backpropagation(net, inputs, actualOutputs, learningRate):
+        rawData = line.split()
+        inputs = list(map(float, rawData[:-1]))
+        actualLabel = rawData[-1]
+        outputVector = [float(l == actualLabel) for l in labels]
+        if backpropagation(net, inputs, outputVector, learningRate):
             numUpdates += 1
     if summary:
         print("Training complete: " + str(t) + " samples, "
@@ -163,7 +193,6 @@ def validateNetwork(net, dataSource, summary=True):
         0.4 -1.2 5.2 red
     denotes a data point with features (0.4, -1.2, 5.2) in class "red". If
     summary is set to False, the session will not be summarized."""
-    # TODO: Adapt for general networks.
     lines = dataSource.readlines()
     total = len(lines)
     correct = 0.0
@@ -171,8 +200,8 @@ def validateNetwork(net, dataSource, summary=True):
         line = line[:-1] if line[-1] == '\n' else line
         data = line.split()
         label = data[-1]
-        inputs = list(map(int, data[:-1]))
-        prediction = net.run(inputs)[0]
+        inputs = list(map(float, data[:-1]))
+        prediction = net.run(inputs)
         if str(prediction) == label:
             correct += 1.0
     if summary:

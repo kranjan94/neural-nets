@@ -153,7 +153,16 @@ exec(getCodeLine("from train import validate"))
 print("\nThis is used almost the same way as train:")
 exec(getCodeLine("validate(perceptron, 'examples/validation2.txt')"))
 
-print("\nOver 99% accuracy. Looks good!")
+print("\nNow, let's try training a general network:")
+exec(getCodeLine("net = Network(2, [], 2)"))
+exec(getCodeLine("train(net, 'examples/train2.txt', inverseTime"
+    + "LearningRate(1))"))
+
+print("\nAnd validating it:")
+exec(getCodeLine("validate(net, 'examples/validation2.txt')"))
+
+print("\nAlmost 90% accuracy with the general network and over 99% with the "
+    + "perceptron. Not bad!")
 
 print("\nThis concludes the tutorial. You can find more details about the "
     + "options available to you in network.py, train.py, and "
