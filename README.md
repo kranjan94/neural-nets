@@ -45,11 +45,63 @@ Constructs a network with no hidden nodes, 3 inputs, 2 outputs, no bias input, a
     net = Network(3, [4, 5], 2, bias=True)
 Constructs a network with 3 inputs, 2 outputs, a hidden layer with 4 nodes, a hidden layer with 5 nodes, and a bias input and sigmoid activations on all hidden and output nodes.
 
-    net = Network(3, [], 2, validLabels=['red', 'blue'])
-Constructs a network like that in the first example, but with labels of 'red' and 'blue' associated with the output nodes.
+    net = Network(3, [], 2, validLabels=['red', 'blue'], outputActivationFunction=arctanActivation)
+Constructs a network like that in the first example, but with labels of 'red' and 'blue' associated with the output layer and an arctan activation function on the output nodes.
 
     net = Perceptron(4)
 Constructs a 4-input perceptron as a special instance of a Network.
 
     net = Network.fromFile('examples/exampleLayout.network')
 Constructs the network specified in the exampleLayout file with default settings.
+
+###Training and Validation
+Perceptrons and general networks are handled by different methods, but the `train` method can be used for both and will call the correct method for you. It takes as arguments a `Network`, the path to a data file, and a learning rate function (see below). Similarly, validate is the central method for validation, and takes a `Network` and the path to a data file as arguments. Both methods also take a boolean `summary` argument, `True` by default, that signifies whether a one-line summary of the training/validation should be printed.
+
+####Data Files
+Each line in a data file gives the feature values and label for one data sample. A training/validation data file for an N-input perceptron, therefore, has N + 1 space-delimited values on each line: the first N are the values for each of the N input features while the last is the label.
+
+For a perceptron, the only valid labels are `0` and `1`:
+
+    -3.4 4.2 9.5 -0.2 1
+    2.5 -3.4 -8.5 1.3 0
+    ...
+In contrast, a general network with K outputs can accomodate K labels (which must be specified during construction of the network; otherwise, the default labels of `0`, `1`, ..., `K-1` are used):
+
+    0.2 1.4 -4.2 red
+    -1.2 5.3 0.1 blue
+    0.6 -1.2 9.3 yellow
+    ...
+Other than this, training and validation data sets are constructed identically.
+
+####Learning Rate Functions
+In this package, the learning rate for the T'th sample in a training set is given by some function of T. In other words, the learning rate is time-dependent. `train.py` has several functions that allow you to customize these learning rate functions; for example, `inverseTimeLearningRate(k)` returns a function that gives, at time `t`, the learning rate `k/t`. `inverseTimeLearningRate(1)`, therefore, is the common `1/t` learning rate.
+
+###Example Workflow
+Let's suppose that we have a 4-dimensional data set with labels "coffee mug", "wine glass", and "tea cup". Since labels must be one word, these become `coffee_mug`, `wine_glass`, and `tea_cup`. We would then have training data (in, say, `train.txt`) and validation data (`validation.txt`) that each look like:
+
+    1.2 9.3 -0.2 1.5 coffee_mug
+    4.2 -0.2 1.2 -0.3 wine_glass
+    -0.1 -5.3 4.3 1.7 tea_cup
+    5.3 -1.2 0.9 -0.5 wine_glass
+    ...
+As a general network, this must have 4 input nodes (for each feature) and 3 output nodes (for each possible label). Suppose now that we want 2 hidden layers: one with 5 nodes followed by one with 4 nodes. We will also use a bias input and an arctan activation function on the hidden nodes. Then, we can construct our network with:
+
+    from network import Network
+    from activationFunctions import arctanActivation
+    
+    cupClassifier = Network(4, [5, 4], 3, bias=True, 
+        validLabels=['coffee_mug', 'wine_glass', 'tea_cup'],
+        outputActivationFunction=arctanActivation)
+
+Now, suppose we wish to train our network with an inverse time learning rate with an initial value of 2. We can proceed with:
+
+    from train import train, validate
+    from train import inverseTimeLearningRate
+    
+    train(cupClassifier, 'train.txt', inverseTimeLearningRate(2))
+    validate(cupClassifier, 'validate.txt')
+
+Finally, to use our network, we can use the `Network` class' `run` function, which takes a list containing the inputs to the network:
+
+    cupClassifier.run([-0.2, 4.3, 1.2, -0.4])
+More examples can be found in `example.py`, which demos some of the functionality of the package, and `tutorial.py`, an interactive introduction to the package.
