@@ -77,7 +77,7 @@ Other than this, training and validation data sets are constructed identically.
 In this package, the learning rate for the T'th sample in a training set is given by some function of T. In other words, the learning rate is time-dependent. `train.py` has several functions that allow you to customize these learning rate functions; for example, `inverseTimeLearningRate(k)` returns a function that gives, at time `t`, the learning rate `k/t`. `inverseTimeLearningRate(1)`, therefore, is the common `1/t` learning rate.
 
 ###Example Workflow
-Let's suppose that we have a 4-dimensional data set with labels "coffee mug", "wine glass", and "tea cup". Since labels must be one word, these become `coffee_mug`, `wine_glass`, and `tea_cup`. We would then have training data (in, say, `train.txt`) and validation data (`validation.txt`) that each look like:
+Let's suppose that we have a 4-dimensional data set with labels "coffee mug", "wine glass", and "tea cup". Since labels must be one word, these become `coffee_mug`, `wine_glass`, and `tea_cup`. We would then have training data (in, say, `train.txt`) and validation data (`validate.txt`) that each look like:
 
     1.2 9.3 -0.2 1.5 coffee_mug
     4.2 -0.2 1.2 -0.3 wine_glass
