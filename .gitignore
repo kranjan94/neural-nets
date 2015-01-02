@@ -1,0 +1,5 @@
+*.pyc
+test.py
+cup*
+mnistData/mnistTrain.txt
+mnistData/mnistValidate.txt

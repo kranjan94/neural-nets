@@ -144,6 +144,8 @@ class Perceptron(Network):
         return str(self.harness.run(data)[0])
 
 
+BYPASS = -1  # When passed to a node's process method, uses last output.
+
 class NetworkHarness(object):
     """A NetworkHarness provides the framework for a neural network. It feeds
     data to the input nodes and runs data through the network to the output
@@ -176,7 +178,8 @@ class NetworkHarness(object):
         if len(data) != len(self.inputs):
             raise BadInputException(len(self.inputs), len(data))
         self.inputs = data
-        return [node.process() for node in self.outputs]
+        callingSignature = random()
+        return [node.process(callingSignature) for node in self.outputs]
 
 
 class Node(object):
@@ -186,6 +189,8 @@ class Node(object):
         self.index = index  # A node's index is its unique identifier
         # If bias is False, ignore it; else, incorporate the bias node
         self.bias = bias
+        self.currentValue = 0.0
+        self.lastSignature = None  # Used for memoization
         self.weights = {bias: 0.0} if bias else {}
         self.inputs = [bias] if bias else []
         self.children = set()
@@ -194,7 +199,7 @@ class Node(object):
         """The str() method for a Node prints its type, its index, and its
         current output value."""
         typeName = str(self.__class__.__name__)
-        return typeName + " " + self.index + ": " + str(self.process())
+        return typeName + " " + self.index + ": " + str(self.process(BYPASS))
 
     def registerParent(self, node):
         """Registers an input node and initializes its weight to 0. Also
@@ -207,11 +212,11 @@ class Node(object):
         """Registers a node as a child of this node."""
         self.children.add(node)
 
-    def getWeightedInputSum(self):
+    def getWeightedInputSum(self, callingSignature):
         """Returns the weighted sum of the inputs to this node."""
         weightedInput = 0.0
         for node in self.inputs:
-            rawInput = node.process()
+            rawInput = node.process(callingSignature)
             weightedInput += rawInput * self.weights[node]
         return weightedInput
 
@@ -222,9 +227,12 @@ class Node(object):
         vector.sort()
         return "(" + ", ".join(vector) + ")"
 
-    def process(self):
+    def process(self, callingSignature=None):
         """Grabs inputs to this node, computes net input, and returns output
-        using the activation function. Implemented by each Node subclass."""
+        using the activation function. Implemented by each Node subclass.
+        callingSignature is passed in by the harness on each run; this enables
+        a 'caching' functionality from later nodes, as they need not recalculate
+        values that have already been calculated for the same run."""
         pass
 
 class InputNode(Node):
@@ -234,28 +242,48 @@ class InputNode(Node):
         Node.__init__(self, activationFunc, index, False)
         self.harness = harness
 
-    def process(self):
+    def process(self, callingSignature=None):
         """Grabs input value from the network harness and passes it through
         the activation function."""
-        return self.activationFunc(self.harness.getInputValue(self))
+        if callingSignature in [self.lastSignature, BYPASS]:
+            return self.currentValue
+        else:
+            newVal = self.activationFunc(self.harness.getInputValue(self))
+            self.currentValue = newVal
+            self.lastSignature = callingSignature
+            return newVal
 
 
 class HiddenNode(Node):
     """A node in a hidden layer. Grabs data from either the input layer or the
     previous hidden layer to compute its value."""
-    def process(self):
+    def process(self, callingSignature):
         """Computes weighted sum of input nodes and returns the value after
         passing through the activation function."""
-        return self.activationFunc(self.getWeightedInputSum())
+        if callingSignature in [self.lastSignature, BYPASS]:
+            return self.currentValue
+        else:
+            newVal = self.activationFunc(\
+                self.getWeightedInputSum(callingSignature))
+            self.currentValue = newVal
+            self.lastSignature = callingSignature
+            return newVal
 
 
 class OutputNode(Node):
     """An output node. Grabs data from either the input layer or the last
     hidden layer to compute its value."""
-    def process(self):
+    def process(self, callingSignature=None):
         """Computes weighted sum of input nodes and returns the value after
         passing through the activation function."""
-        return self.activationFunc(self.getWeightedInputSum())
+        if callingSignature in [self.lastSignature, BYPASS]:
+            return self.currentValue
+        else:
+            newVal = self.activationFunc(\
+                self.getWeightedInputSum(callingSignature))
+            self.currentValue = newVal
+            self.lastSignature = callingSignature
+            return newVal
 
 
 class BiasNode(Node):
@@ -265,5 +293,5 @@ class BiasNode(Node):
         self.value = value
         self.index = "bias"
 
-    def process(self):
+    def process(self, callingSignature=None):
         return self.value

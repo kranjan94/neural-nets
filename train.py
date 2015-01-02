@@ -1,5 +1,5 @@
 from random import random
-from network import Perceptron
+from network import Perceptron, BYPASS
 from activationFunctions import DERIVATIVES
 from networkExceptions import TrainingError
 
@@ -34,8 +34,6 @@ def exponentialLearningRate(base):
 
 """ -- Training functions -- """
 
-ERROR_THRESHOLD = 0.05  # Threshold for detecting errors from networks
-
 def train(network, sourceFile, learningRateFunction, summary=True):
     """Main function for training networks."""
     dataSource = open(sourceFile)
@@ -48,20 +46,6 @@ def validate(network, sourceFile, summary=True):
     """Main function for validating networks."""
     dataSource = open(sourceFile)
     validateNetwork(network, dataSource, summary)
-
-def prepDataFile(rawDataFilename, labels):
-    outputDataFilename = rawDataFilename + '.data'
-    file = open(outputDataFilename, 'w')
-    for line in file.readlines():
-        line = line[:-1] if line[-1] == '\n' else line
-        data = line.split()
-        inputs = data[:-1]
-        label = data[-1]
-        outputVector = [1.0 if l == label else 0.0 for l in labels]
-        processedLine = inputs + outputVector
-        file.write('\t'.join(processedLine) + '\n')
-    file.close()
-    return outputDataFilename
 
 def trainPerceptron(perceptron, dataSource, learningRateFunction, summary=True):
     """Trains a perceptron according to the data points in a data source.
@@ -107,14 +91,10 @@ def computeNodeErrors(net, inputs, actualOutputs):
     label = net.run(inputs)
     predictedOutputs = [1.0 if l == label else 0.0 for l in net.validLabels]
     for i, node in enumerate(net.outputLayer):
-        activationDerivative = DERIVATIVES[node.activationFunc]
-        if activationDerivative is None:
-            raise TrainingError("Activation function of node "
-                + str(node) + " is non-differentiable.")
-        weightedInput = node.getWeightedInputSum()
-        nodeDerivative = activationDerivative(weightedInput)
-        errors[node] = nodeDerivative * (predictedOutputs[i] - actualOutputs[i])
+        errors[node] = predictedOutputs[i] - actualOutputs[i]
         squareError += errors[node] ** 2
+    if squareError == 0.0:  # No need to continue
+        return ({node:0.0 for node in net.nodes}, 0.0)
     reversedLayers = net.hiddenLayers[:]
     reversedLayers.reverse()
     toBeComputed = []
@@ -139,19 +119,17 @@ def computeNodeErrors(net, inputs, actualOutputs):
                 if activationDerivative is None:
                     raise TrainingError("Activation function of node "
                         + str(node) + " is non-differentiable.")
-                weightedInput = node.getWeightedInputSum()
+                weightedInput = node.getWeightedInputSum(BYPASS)
                 nodeDerivative = activationDerivative(weightedInput)
                 errors[node] = nodeDerivative * totalChildError
         toBeComputed = newToBeComputed
-    #print({str(n): errors[n] for n in errors})
     return (errors, squareError)
 
 def backpropagation(net, inputs, actualOutputs, learningRate):
     """Performs backpropagation training for a single training sample. Returns
-    true if updates were made (i.e. if squareError is below a threshold); false
-    otherwise."""
+    true if updates were made (i.e. if squareError is 0); false otherwise."""
     nodeErrors, squareError = computeNodeErrors(net, inputs, actualOutputs)
-    if squareError < ERROR_THRESHOLD:
+    if squareError == 0.0:
         return False
     targetNodes = net.outputLayer[:]
     for layer in net.hiddenLayers:
@@ -159,7 +137,7 @@ def backpropagation(net, inputs, actualOutputs, learningRate):
     for node in targetNodes:
         newWeights = []
         for parent in node.inputs:
-            parentInput = parent.process()
+            parentInput = parent.process(BYPASS)
             weightChange = -1 * learningRate * parentInput * nodeErrors[node]
             currWeight = node.weights[parent]
             newWeights.append(currWeight + weightChange)
@@ -182,6 +160,9 @@ def trainNetwork(net, dataSource, learningRateFunction, summary=True):
         outputVector = [float(l == actualLabel) for l in labels]
         if backpropagation(net, inputs, outputVector, learningRate):
             numUpdates += 1
+        if t % 100 == 0:
+            print(str(t) + ' training rounds performed; ' + str(numUpdates)
+                + ' updates so far.')
     if summary:
         print("Training complete: " + str(t) + " samples, "
             + str(numUpdates) + " updates.")
@@ -195,15 +176,20 @@ def validateNetwork(net, dataSource, summary=True):
     summary is set to False, the session will not be summarized."""
     lines = dataSource.readlines()
     total = len(lines)
-    correct = 0.0
+    correct = 0
+    t = 0
     for line in lines:
+        t += 1
         line = line[:-1] if line[-1] == '\n' else line
         data = line.split()
         label = data[-1]
         inputs = list(map(float, data[:-1]))
         prediction = net.run(inputs)
         if str(prediction) == label:
-            correct += 1.0
+            correct += 1
+        if t % 100 == 0:
+            print(str(t) + ' validation rounds performed; ' + str(t - correct)
+                + ' errors so far.')
     if summary:
         print("Validation complete: " + str(total) + " samples, " + str(correct)
             + " correct, " + str(correct*100/total) + "% accuracy.")
